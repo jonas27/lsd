@@ -69,7 +69,13 @@ func run() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(b), nil
+
+  bs, err := marshal(b)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bs), nil
 }
 
 func isJSON(s []byte) bool {
@@ -111,11 +117,8 @@ func parse(in []byte) (secret, error) {
 			if err != nil {
 				return nil, err
 			}
-			_ = k
 			s["items"].([]interface{})[k] = parsed
 		}
-		fmt.Println(s)
-		os.Exit(1)
 		return s, nil
 	}
 

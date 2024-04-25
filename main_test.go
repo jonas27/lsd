@@ -285,7 +285,10 @@ func TestParse(t *testing.T) {
 	expected := `{"key": "value"}`
 	s, err := parse([]byte(`{"key": "value"}`))
 	assert.NoError(t, err)
-	assert.Equal(t, expected, string(s))
+  t.Log(s)
+	ss, err := marshal(s)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, string(ss))
 
 	_, err = parse([]byte(`{"data": {"password": "c2VjcmV0"}}`))
 	assert.NoError(t, err)
