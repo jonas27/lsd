@@ -29,16 +29,6 @@ type decodedSecret struct {
 var log *slog.Logger
 
 func main() {
-	info, err := os.Stdin.Stat()
-	if err != nil {
-		panic(err)
-	}
-
-	if (info.Mode()&os.ModeCharDevice) != 0 || info.Size() < 0 {
-		fmt.Println(notPipeError)
-		os.Exit(exitFail)
-	}
-
 	log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	out, err := run()
@@ -50,6 +40,9 @@ func main() {
 }
 
 func run() (string, error) {
+	if err := checkStat(); err != nil {
+		return "", err
+	}
 	stdin := read(os.Stdin)
 
 	isjson := isJSON(stdin)
@@ -90,6 +83,17 @@ func run() (string, error) {
 	}
 
 	return string(bs), nil
+}
+
+func checkStat() error {
+	info, err := os.Stdin.Stat()
+	if err != nil {
+		return err
+	}
+	if (info.Mode()&os.ModeCharDevice) != 0 || info.Size() < 0 {
+		return fmt.Errorf(notPipeError)
+	}
+	return nil
 }
 
 func isJSON(s []byte) bool {
