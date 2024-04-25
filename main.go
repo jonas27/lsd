@@ -52,27 +52,41 @@ func main() {
 func run() (string, error) {
 	stdin := read(os.Stdin)
 
-	var injson string
 	isjson := isJSON(stdin)
 	if !isjson {
 		injsonbytes, err := yaml.YAMLToJSON(stdin)
 		if err != nil {
 			return "", fmt.Errorf("error converting from yaml to json : %w", err)
 		}
-		injson = string(injsonbytes)
+		stdin = injsonbytes
+	}
+
+	var s secret
+	if err := unmarshal(stdin, &s, isjson); err != nil {
+		return "", err
+	}
+
+	if isList(s) {
+		for k, i := range s["items"].([]interface{}) {
+			ii := i.(map[string]interface{})
+			ss, err := stringData(ii)
+			if err != nil {
+				return "", err
+			}
+			s["items"].([]interface{})[k] = ss
+		}
 	} else {
-		injson = string(stdin)
-	}
-	_ = injson
+		var err error
+		s, err = stringData(s)
 
-	b, err := parse(stdin)
-	if err != nil {
-		return "", err
+		if err != nil {
+			return "", fmt.Errorf("error unmarshaling secret: %w", err)
+		}
 	}
 
-  bs, err := marshal(b)
+	bs, err := marshal(s)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("can not marshal secret: %w", err)
 	}
 
 	return string(bs), nil
@@ -82,53 +96,19 @@ func isJSON(s []byte) bool {
 	return json.Unmarshal(s, &json.RawMessage{}) == nil
 }
 
-func cast(data interface{}, isJSON bool) (map[string]interface{}, bool) {
-	if isJSON {
-		d, ok := data.(map[string]interface{})
-		return d, ok
-	}
-
-	parsed, ok := data.(map[interface{}]interface{})
-	if !ok {
-		return nil, false
-	}
-	d := make(map[string]interface{}, len(parsed))
-	for key, value := range parsed {
-		d[key.(string)] = value
-	}
-	return d, true
+func cast(data interface{}) (map[string]interface{}, bool) {
+	d, ok := data.(map[string]interface{})
+	return d, ok
 }
 
-func parse(in []byte) (secret, error) {
-	isJSON := isJSON(in)
-
-	var s secret
-	if err := unmarshal(in, &s, isJSON); err != nil {
-		return nil, err
-	}
-
-	if isList(s) {
-		for k, i := range s["items"].([]interface{}) {
-			item, err := json.Marshal(i)
-			if err != nil {
-				return nil, err
-			}
-			parsed, err := parse(item)
-			if err != nil {
-				return nil, err
-			}
-			s["items"].([]interface{})[k] = parsed
-		}
-		return s, nil
-	}
-
-	data, ok := cast(s["data"], isJSON)
+func stringData(s secret) (secret, error) {
+	data, ok := cast(s["data"])
 	if !ok || len(data) == 0 {
-		return nil, fmt.Errorf("could not read secret")
+		return s, nil
 	}
 	s["stringData"] = decode(data)
 	delete(s, "data")
-  return s, nil
+	return s, nil
 }
 
 func read(rd io.Reader) []byte {
