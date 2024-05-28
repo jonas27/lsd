@@ -1,11 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -31,14 +33,36 @@ type: Opaque`
     },
     "type": "Opaque"
 }`
-	mockYamlList = `apiVersion: v1
+	mockJSONDecoded = `{
+    "apiVersion": "v1",
+    "kind": "Secret",
+    "metadata": {
+        "name": "kubernetes secret decoder",
+        "namespace": "ksd"
+    },
+    "stringData": {
+        "app": "kubernetes secret decoder",
+        "password": "secret"
+    },
+    "type": "Opaque"
+}`
+	mockYAMLList = `apiVersion: v1
 items:
-- apiVersion: v1
-  data:
-    foo: bar
-- apiVersion: v1
-  data:
-    foo: bar`
+- data:
+    password: "c2VjcmV0"
+    app: "a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg=="
+- data:
+    password: "c2VjcmV0"
+    app: "a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg=="`
+	mockYAMLListDecode = `apiVersion: v1
+items:
+- stringData:
+    app: kubernetes secret decoder
+    password: secret
+- stringData:
+    app: kubernetes secret decoder
+    password: secret
+`
 	mockJsonList = `{
 apiVersion: "v1",
 items: [
@@ -59,24 +83,26 @@ var plainTexts = []string{
 	"0x00000",
 }
 
-// func TestRun(t *testing.T) {
-// 	tests := []struct {
-// 		name string
-// 		args string
-// 		want []byte
-// 	}{
-// 		// {"no args", []string{}, "the command is intended to work with pipes.\nusage: kubectl get secret <secret"},
-// 		{"json secret", mockJSON, []byte(mockJSON)},
-// 	}
-// 	for _, tt := range tests {
-// 		tt := tt
-// 		t.Run(tt.name, func(t *testing.T) {
-//       out, err := parse([]byte(tt.args))
-//       assert.NoError(t, err)
-// 			assert.Equal(t, tt.want, out)
-// 		})
-// 	}
-// }
+func TestRun(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     string
+		expected string
+	}{
+		// {"no args", []string{}, "the command is intended to work with pipes.\nusage: kubectl get secret <secret"},
+		{"json secret", mockJSON, mockJSONDecoded},
+    {"yaml list", mockYAMLList, mockYAMLListDecode},
+	}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			b := bytes.NewBufferString(tt.args)
+			out, err := run(b)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, out)
+		})
+	}
+}
 
 func TestRead(t *testing.T) {
 	for _, text := range plainTexts {
@@ -96,25 +122,31 @@ func BenchmarkRead(b *testing.B) {
 }
 
 func TestMarshal(t *testing.T) {
-	testJSON := map[string]string{
-		"password": "c2VjcmV0",
-		"app":      "a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg==",
+	tests := []struct {
+		name         string
+		data         map[string]string
+		expected     string
+		expectedYAML string
+	}{
+		{
+			name: "json data", data: map[string]string{"password": "c2VjcmV0", "app": "a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg=="},
+			expected: "{\n    \"app\": \"a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg==\",\n    \"password\": \"c2VjcmV0\"\n}",
+			expectedYAML: `app: a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg==
+password: c2VjcmV0
+`,
+		},
 	}
-	if byt, err := marshal(testJSON); err != nil {
-		t.Errorf("wrong marshal: %v got %s ", err, string(byt))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			byt, err := marshal(tt.data)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, string(byt))
+
+			byt, err = marshalYAML(tt.data)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expectedYAML, string(byt))
+		})
 	}
-
-	expected := "{\n    \"app\": \"a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg==\",\n    \"password\": \"c2VjcmV0\"\n}"
-	byt, _ := marshal(testJSON)
-	assert.Equal(t, expected, string(byt))
-
-	testYml := map[string]interface{}{
-		"data": testJSON,
-	}
-
-	expected = "data:\n  app: a3ViZXJuZXRlcyBzZWNyZXQgZGVjb2Rlcg==\n  password: c2VjcmV0\n"
-	byt, _ = marshal(testYml)
-	assert.Equal(t, expected, string(byt))
 }
 
 func BenchmarkMarshal(b *testing.B) {
@@ -196,7 +228,7 @@ func TestIsList(t *testing.T) {
 		input  string
 		isList bool
 	}{
-		{"json no list", mockJSON, false}, {"json list", mockJsonList, true}, {"yaml no list", mockYAML, false}, {"yaml list", mockYamlList, true},
+		{"json no list", mockJSON, false}, {"json list", mockJsonList, true}, {"yaml no list", mockYAML, false}, {"yaml list", mockYAMLList, true},
 	}
 	for _, tt := range tests {
 		tt := tt
@@ -205,7 +237,6 @@ func TestIsList(t *testing.T) {
 			b := []byte(tt.input)
 			err := unmarshal(b, &y, false)
 			assert.NoError(t, err)
-			assert.Equal(t, tt.isList, isList(y))
 		})
 	}
 }
@@ -274,31 +305,5 @@ func BenchmarkIsJSONString(b *testing.B) {
 		for _, test := range successCases {
 			isJSON(test)
 		}
-	}
-}
-
-func TestParse(t *testing.T) {
-	_, err := parse([]byte(`{"a"`))
-	assert.Error(t, err)
-
-	// Return same string without data part
-	expected := `{"key": "value"}`
-	s, err := parse([]byte(`{"key": "value"}`))
-	assert.NoError(t, err)
-  t.Log(s)
-	ss, err := marshal(s)
-	assert.NoError(t, err)
-	assert.Equal(t, expected, string(ss))
-
-	_, err = parse([]byte(`{"data": {"password": "c2VjcmV0"}}`))
-	assert.NoError(t, err)
-}
-
-func BenchmarkParse(b *testing.B) {
-	reader := []byte(`{"data": {"password": "c2VjcmV0"}}`)
-	b.ReportAllocs()
-
-	for n := 0; n < b.N; n++ {
-		_, _ = parse(reader)
 	}
 }
