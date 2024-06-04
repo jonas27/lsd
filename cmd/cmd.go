@@ -35,8 +35,7 @@ kubectl neat -f - <./my-secret.json
 kubectl neat -f ./my-secret.json
 kubectl neat -f ./my-secret.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-    fmt.Println("rootCmd.RunE")
-		var in, out []byte
+		var in []byte
 		var err error
 		if *inputFile == "-" {
 			stdin := cmd.InOrStdin()
@@ -49,10 +48,11 @@ kubectl neat -f ./my-secret.json`,
 				return fmt.Errorf("error reading file %s: %w", *inputFile, err)
 			}
 		}
-		if out, err = Lsd(in); err != nil {
+    out, err := Lsd(in)
+    if err != nil {
 			return fmt.Errorf("error running Lsd: %w", err)
 		}
-		cmd.Print(string(out))
+		cmd.Print(out)
 		return nil
 	},
 }
@@ -65,7 +65,6 @@ var getCmd = &cobra.Command{
 kubectl neat get -- svc -n default myservice --output json`,
 	FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true}, // don't try to validate kubectl get's flags
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var out []byte
 		var err error
 
 		kubectlCmd := exec.Command(kubectl, args...)
@@ -74,11 +73,11 @@ kubectl neat get -- svc -n default myservice --output json`,
 			return fmt.Errorf("error invoking kubectl as %v: %w", kubectlCmd.Args, err)
 		}
 
-		out, err = Lsd(kres)
+    out, err := Lsd(kres)
 		if err != nil {
 			return err
 		}
-		cmd.Println(string(out))
+		cmd.Println(out)
 		return nil
 	},
 }

@@ -1,4 +1,4 @@
-package main
+package internal
 
 import (
 	"bufio"
@@ -28,27 +28,28 @@ type decodedSecret struct {
 
 var log *slog.Logger
 
-func main() {
-	log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+// func main() {
+// 	log = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
+//
+// 	out, err := run(os.Stdin)
+// 	if err != nil {
+// 		fmt.Fprintln(os.Stderr, err)
+// 		os.Exit(exitFail)
+// 	}
+// 	fmt.Fprint(os.Stdout, string(out))
+// }
 
-	out, err := run(os.Stdin)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(exitFail)
-	}
-	fmt.Fprint(os.Stdout, string(out))
-}
+// func runEnv(stdinRaw io.Reader) (string, error) {
+// 	if err := checkStat(); err != nil {
+// 		return "", err
+// 	}
+//   return run(stdinRaw)
+// }
 
-func runEnv(stdinRaw io.Reader) (string, error) {
-	if err := checkStat(); err != nil {
-		return "", err
-	}
-  return run(stdinRaw)
-}
+// func run(stdinRaw io.Reader) (string, error) {
+// 	stdin := read(stdinRaw)
 
-func run(stdinRaw io.Reader) (string, error) {
-	stdin := read(stdinRaw)
-
+func Run(stdin []byte) (string, error) {
 
 	isjson := isJSON(stdin)
 	if !isjson {
@@ -81,8 +82,6 @@ func run(stdinRaw io.Reader) (string, error) {
 			return "", fmt.Errorf("error unmarshaling secret: %w", err)
 		}
 	}
-
-	fmt.Println(s)
 
 	var bs []byte
 	var err error

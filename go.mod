@@ -1,4 +1,4 @@
-module github.com/jonas27/lsd
+module github.com/jonas27/kubectl-lsd
 
 go 1.22
 

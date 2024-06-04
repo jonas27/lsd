@@ -2,15 +2,15 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
 	"unicode"
+
+	"github.com/jonas27/lsd/internal"
 )
 
 func isJSON(s []byte) bool {
 	return bytes.HasPrefix(bytes.TrimLeftFunc(s, unicode.IsSpace), []byte{'{'})
 }
 
-func Lsd(in []byte) ([]byte, error) {
-  fmt.Println(string(in))
-  return nil, nil
+func Lsd(in []byte) (string, error) {
+  return internal.Run(in)
 }
